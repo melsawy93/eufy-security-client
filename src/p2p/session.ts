@@ -392,7 +392,11 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     private localLookup(host: string): void {
-        rootP2PLogger.debug(`Trying to local lookup address for station ${this.rawStation.station_sn} with host ${host}`);
+        rootP2PLogger.debug(`Trying to local lookup address for station ${this.rawStation.station_sn} with host ${host}`, { 
+            stationSN: this.rawStation.station_sn, 
+            host: host, 
+            p2pDid: this.rawStation.p2p_did 
+        });
         this.localLookupByAddress({ host: host, port: 32108 });
         this._clearLocalLookupRetryTimeout();
         this.lookupRetryTimeout = setTimeout(() => {
@@ -403,6 +407,13 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     private cloudLookup(): void {
         // Skip cloud lookup for T85D0 if DSK key is not available (cloud lookup requires DSK key)
         const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
+        rootP2PLogger.debug(`cloudLookup() called`, { 
+            stationSN: this.rawStation.station_sn, 
+            isT85D0: isT85D0, 
+            dskKey: this.dskKey, 
+            dskKeyLength: this.dskKey.length,
+            cloudAddressesCount: this.cloudAddresses.length 
+        });
         if (isT85D0 && this.dskKey === "") {
             rootP2PLogger.debug(`Skipping cloud lookup for T85D0 (no DSK key available)`, { stationSN: this.rawStation.station_sn });
             return;
@@ -495,6 +506,12 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 host = localIP.substring(0, localIP.lastIndexOf(".") + 1).concat("255")
             }
         }
+        rootP2PLogger.debug(`lookup() called`, { 
+            stationSN: this.rawStation.station_sn, 
+            host: host, 
+            preferredIPAddress: this.preferredIPAddress,
+            localIPAddress: this.localIPAddress 
+        });
         this.localLookup(host);
         this.cloudLookup();
 
@@ -514,13 +531,24 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     public async connect(host?: string): Promise<void> {
+        rootP2PLogger.debug(`P2P connect() called`, { 
+            stationSN: this.rawStation.station_sn, 
+            connected: this.connected, 
+            connecting: this.connecting, 
+            p2pDid: this.rawStation.p2p_did,
+            host: host 
+        });
         if (!this.connected && !this.connecting && this.rawStation.p2p_did !== undefined) {
             this.connecting = true;
             this.terminating = false;
+            rootP2PLogger.debug(`Starting P2P connection process`, { stationSN: this.rawStation.station_sn, p2pDid: this.rawStation.p2p_did });
             await this.renewDSKKey();
-            if (!this.binded)
+            rootP2PLogger.debug(`DSK key renewal completed`, { stationSN: this.rawStation.station_sn, dskKey: this.dskKey, dskKeyLength: this.dskKey.length });
+            if (!this.binded) {
+                rootP2PLogger.debug(`Binding socket before lookup`, { stationSN: this.rawStation.station_sn, listeningPort: this.listeningPort });
                 this.socket.bind(this.listeningPort, () => {
                     this.binded = true;
+                    rootP2PLogger.debug(`Socket bound, starting lookup`, { stationSN: this.rawStation.station_sn, listeningPort: this.listeningPort });
                     try {
                         this.socket.setRecvBufferSize(this.UDP_RECVBUFFERSIZE_BYTES);
                         this.socket.setBroadcast(true);
@@ -528,11 +556,20 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                         const error = ensureError(err);
                         rootP2PLogger.error(`connect - Error`, { error: getError(error), stationSN: this.rawStation.station_sn, host: host, currentRecBufferSize: this.socket.getRecvBufferSize(), recBufferRequestedSize: this.UDP_RECVBUFFERSIZE_BYTES });
                     }
+                    rootP2PLogger.debug(`Calling lookup()`, { stationSN: this.rawStation.station_sn, host: host });
                     this.lookup(host);
                 });
-            else {
+            } else {
+                rootP2PLogger.debug(`Socket already bound, calling lookup() directly`, { stationSN: this.rawStation.station_sn, host: host });
                 this.lookup(host);
             }
+        } else {
+            rootP2PLogger.debug(`P2P connect() skipped - already connected/connecting or no p2p_did`, { 
+                stationSN: this.rawStation.station_sn, 
+                connected: this.connected, 
+                connecting: this.connecting, 
+                p2pDid: this.rawStation.p2p_did 
+            });
         }
     }
 
@@ -666,6 +703,13 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 }
             } else if (!this.connected && this.sendQueue.filter((queue) => queue.p2pCommand.commandType !== CommandType.CMD_PING && queue.p2pCommand.commandType !== CommandType.CMD_GET_DEVICE_PING).length > 0) {
                 rootP2PLogger.debug(`Initiate station p2p connection to send queued data`, { stationSN: this.rawStation.station_sn, queuedDataCount: this.sendQueue.filter((queue) => queue.p2pCommand.commandType !== CommandType.CMD_PING && queue.p2pCommand.commandType !== CommandType.CMD_GET_DEVICE_PING).length });
+                rootP2PLogger.debug(`About to call connect() from sendQueuedMessage`, { 
+                    stationSN: this.rawStation.station_sn, 
+                    connected: this.connected, 
+                    connecting: this.connecting,
+                    p2pDid: this.rawStation.p2p_did,
+                    p2pDidUndefined: this.rawStation.p2p_did === undefined
+                });
                 this.connect();
             }
         }

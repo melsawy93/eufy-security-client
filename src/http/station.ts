@@ -5347,9 +5347,13 @@ export class Station extends TypedEmitter<StationEvents> {
             );
             rootHTTPLogger.debug("Station lock device - Locking/unlocking device...", { station: this.getSerial(), device: device.getSerial(), deviceSN: deviceSN, admin_user_id: this.rawStation.member.admin_user_id, payload: command.payload });
 
-            // Set channel on the payload object for sendCommandWithStringPayload
-            command.payload.channel = device.getChannel();
-            this.p2pSession.sendCommandWithStringPayload(command.payload, {
+            // Create P2PCommand object with channel for sendCommandWithStringPayload
+            const p2pCommand: P2PCommand = {
+                commandType: command.payload.commandType,
+                value: command.payload.value,
+                channel: device.getChannel()
+            };
+            this.p2pSession.sendCommandWithStringPayload(p2pCommand, {
                 property: propertyData
             });
         } else {

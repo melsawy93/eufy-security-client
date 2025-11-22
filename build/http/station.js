@@ -5266,9 +5266,17 @@ class Station extends tiny_typed_emitter_1.TypedEmitter {
             });
         }
         else if (device.isLockWifiT8506() || device.isLockWifiT8502() || device.isLockWifiT8510P() || device.isLockWifiT8520P() || device.isLockWifiT85D0()) {
-            const command = (0, utils_2.getSmartLockP2PCommand)(this.rawStation.station_sn, this.rawStation.member.admin_user_id, types_2.SmartLockCommand.ON_OFF_LOCK, device.getChannel(), this.p2pSession.incLockSequenceNumber(), device_1.Lock.encodeCmdSmartLockUnlock(this.rawStation.member.admin_user_id, value, this.rawStation.member.nick_name, this.rawStation.member.short_user_id));
-            logging_1.rootHTTPLogger.debug("Station lock device - Locking/unlocking device...", { station: this.getSerial(), device: device.getSerial(), admin_user_id: this.rawStation.member.admin_user_id, payload: command.payload });
-            this.p2pSession.sendCommandWithStringPayload(command.payload, {
+            // For T85D0, use device serial instead of station serial since it's a standalone lock
+            const deviceSN = device.isLockWifiT85D0() ? device.getSerial() : this.rawStation.station_sn;
+            const command = (0, utils_2.getSmartLockP2PCommand)(deviceSN, this.rawStation.member.admin_user_id, types_2.SmartLockCommand.ON_OFF_LOCK, device.getChannel(), this.p2pSession.incLockSequenceNumber(), device_1.Lock.encodeCmdSmartLockUnlock(this.rawStation.member.admin_user_id, value, this.rawStation.member.nick_name, this.rawStation.member.short_user_id));
+            logging_1.rootHTTPLogger.debug("Station lock device - Locking/unlocking device...", { station: this.getSerial(), device: device.getSerial(), deviceSN: deviceSN, admin_user_id: this.rawStation.member.admin_user_id, payload: command.payload });
+            // Create P2PCommand object with channel for sendCommandWithStringPayload
+            const p2pCommand = {
+                commandType: command.payload.commandType,
+                value: command.payload.value,
+                channel: device.getChannel()
+            };
+            this.p2pSession.sendCommandWithStringPayload(p2pCommand, {
                 property: propertyData
             });
         }
