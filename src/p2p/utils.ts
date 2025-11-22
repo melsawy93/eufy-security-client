@@ -50,12 +50,22 @@ export const getLocalIpAddress = (init = ""): string => {
 }
 
 const p2pDidToBuffer = (p2pDid: string): Buffer => {
-    const p2pArray = p2pDid.split("-");
-    const buf1 = stringWithLength(p2pArray[0], 8);
-    const buf2 = Buffer.allocUnsafe(4);
-    buf2.writeUInt32BE(Number.parseInt(p2pArray[1]), 0);
-    const buf3 = stringWithLength(p2pArray[2], 8);
-    return Buffer.concat([buf1, buf2, buf3], 20);
+    if (p2pDid.includes("-")) {
+        const p2pArray = p2pDid.split("-");
+        if (p2pArray.length === 3 && p2pArray[1]) {
+            const buf1 = stringWithLength(p2pArray[0], 8);
+            const buf2 = Buffer.allocUnsafe(4);
+            buf2.writeUInt32BE(Number.parseInt(p2pArray[1]), 0);
+            const buf3 = stringWithLength(p2pArray[2], 8);
+            return Buffer.concat([buf1, buf2, buf3], 20);
+        }
+    }
+    if (p2pDid.length === 20) {
+        return Buffer.from(p2pDid);
+    }
+    // Fallback or error? For now, return empty or padded if possible, but better to throw if invalid.
+    // However, trying to be robust:
+    return stringWithLength(p2pDid, 20);
 };
 
 export const isP2PCommandEncrypted = function(cmd: CommandType): boolean {
