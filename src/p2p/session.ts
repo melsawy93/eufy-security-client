@@ -506,7 +506,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 host = localIP.substring(0, localIP.lastIndexOf(".") + 1).concat("255")
             }
         }
-        rootP2PLogger.debug(`[T85D0_DEBUG_v2] lookup() called`, { 
+        rootP2PLogger.error(`[T85D0_DEBUG_v2] ===== lookup() called =====`, { 
             stationSN: this.rawStation.station_sn, 
             host: host, 
             preferredIPAddress: this.preferredIPAddress,
@@ -523,6 +523,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
         this._clearLookupTimeout();
         this.lookupTimeout = setTimeout(() => {
             this.lookupTimeout = undefined;
+            rootP2PLogger.error(`[T85D0_DEBUG_v2] ===== All address lookup tentatives failed =====`, { stationSN: this.rawStation.station_sn });
             rootP2PLogger.error(`All address lookup tentatives failed.`, { stationSN: this.rawStation.station_sn });
             if (this.localIPAddress !== undefined)
                 this.localIPAddress = undefined
@@ -2712,7 +2713,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                             }
                         });
                     } else {
-                        rootP2PLogger.error(`Get DSK keys - Response code not ok`, { stationSN: this.rawStation.station_sn, code: result.code, msg: result.msg });
+                        rootP2PLogger.error(`Get DSK keys v2 - Response code not ok`, { stationSN: this.rawStation.station_sn, code: result.code, msg: result.msg });
                         // For T85D0 locks, DSK keys may not be available - this is expected
                         // Connection will rely on local lookup instead of cloud lookup
                         const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
