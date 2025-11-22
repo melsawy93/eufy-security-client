@@ -532,6 +532,22 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 this.localIPAddress = undefined
             this._disconnected();
         }, this.MAX_LOOKUP_TIMEOUT);
+
+        // For T85D0, if we have a valid IP, try to connect directly immediately
+        if (host && this.rawStation.device_type === DeviceType.LOCK_85D0) {
+             rootP2PLogger.debug(`[T85D0_DEBUG_v2] T85D0 detected with IP ${host}, initiating direct connection attempt without waiting for lookup...`, { stationSN: this.rawStation.station_sn });
+             // We need a P2P DID to connect. If empty, use a placeholder to allow packet generation.
+             // This is a gamble, but if the device doesn't enforce DID check on handshake, it might work.
+             // Or it might return the real DID in the response.
+             let p2pDidToUse = this.rawStation.p2p_did;
+             if (!p2pDidToUse || p2pDidToUse === '') {
+                 p2pDidToUse = 'Eufy-000000-T85D0'; // Placeholder in valid format: AAAAAAAA-NNNNNN-BBBBBBBB
+                 rootP2PLogger.warn(`[T85D0_DEBUG_v2] P2P DID is missing, using placeholder for connection attempt: ${p2pDidToUse}`, { stationSN: this.rawStation.station_sn });
+                 // Update the raw station temporarily so buildCheckCamPayload works
+                 // We should probably not overwrite it permanently until confirmed
+             }
+             this._connect({ host: host, port: 32108 }, p2pDidToUse);
+        }
     }
 
     public async connect(host?: string): Promise<void> {
@@ -933,7 +949,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 this._clearLocalLookupRetryTimeout();
 
                 const p2pDid = `${msg.subarray(4, 12).toString("utf8").replace(/[\0]+$/g, "")}-${msg.subarray(12, 16).readUInt32BE().toString().padStart(6, "0")}-${msg.subarray(16, 24).toString("utf8").replace(/[\0]+$/g, "")}`;
-                // rootP2PLogger.trace(`Received message - LOCAL_LOOKUP_RESP - Got response`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
+                rootP2PLogger.trace(`Received message - LOCAL_LOOKUP_RESP - Got response`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
 
                 const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
                 const p2pDidEmpty = this.rawStation.p2p_did === '' || this.rawStation.p2p_did === undefined;
@@ -944,20 +960,20 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 // Otherwise, match by p2p_did
                 if (p2pDidMatches || (isT85D0 && p2pDidEmpty)) {
                     if (isT85D0 && p2pDidEmpty) {
-                        // rootP2PLogger.debug(`[T85D0_DEBUG_v2] Received message - LOCAL_LOOKUP_RESP - T85D0 with empty p2p_did, accepting response and updating p2p_did`, { 
-                        //     stationSN: this.rawStation.station_sn, 
-                        //     ip: rinfo.address, 
-                        //     port: rinfo.port, 
-                        //     receivedP2pDid: p2pDid,
-                        //     oldP2pDid: this.rawStation.p2p_did
-                        // });
+                        rootP2PLogger.debug(`[T85D0_DEBUG_v2] Received message - LOCAL_LOOKUP_RESP - T85D0 with empty p2p_did, accepting response and updating p2p_did`, { 
+                            stationSN: this.rawStation.station_sn, 
+                            ip: rinfo.address, 
+                            port: rinfo.port, 
+                            receivedP2pDid: p2pDid,
+                            oldP2pDid: this.rawStation.p2p_did
+                        });
                         // Update the p2p_did for future use
                         this.rawStation.p2p_did = p2pDid;
                     }
-                    // rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Wanted device was found, connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
+                    rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Wanted device was found, connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
                     this._connect({ host: rinfo.address, port: rinfo.port }, p2pDid);
                 } else {
-                    // rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Unwanted device was found, don't connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid, expectedP2pDid: this.rawStation.p2p_did });
+                    rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Unwanted device was found, don't connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid, expectedP2pDid: this.rawStation.p2p_did });
                 }
             }
         } else if (hasHeader(msg, ResponseMessageType.LOOKUP_ADDR)) {
