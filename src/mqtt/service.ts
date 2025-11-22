@@ -119,6 +119,7 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
                     this.client?.end();
             });
             this.client.on("message", (topic, message, _packet) => {
+                rootMQTTLogger.debug("[T85D0_DEBUG] MQTT message received RAW", { topic: topic, messageHex: message.toString("hex"), length: message.length });
                 if (topic.includes("smart_lock")) {
                     const parsedMessage = this.parseSmartLockMessage(message);
                     rootMQTTLogger.debug("Received a smart lock message over MQTT", { message: parsedMessage });
