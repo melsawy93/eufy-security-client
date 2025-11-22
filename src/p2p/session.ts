@@ -8,7 +8,7 @@ import date from "date-and-time";
 import { Address, CmdCameraInfoResponse, CmdNotifyPayload, CommandResult, ESLAdvancedLockStatusNotification, ESLStationP2PThroughData, SmartSafeSettingsNotification, SmartSafeStatusNotification, CustomData, ESLBleV12P2PThroughData, CmdDatabaseImageResponse, EntrySensorStatus, GarageDoorStatus, StorageInfoHB3, ESLAdvancedLockStatusNotificationT8530, SmartLockP2PThroughData, SmartLockP2PSequenceData } from "./models";
 import { sendMessage, hasHeader, buildCheckCamPayload, buildIntCommandPayload, buildIntStringCommandPayload, buildCommandHeader, MAGIC_WORD, buildCommandWithStringTypePayload, isPrivateIp, buildLookupWithKeyPayload, sortP2PMessageParts, buildStringTypeCommandPayload, getRSAPrivateKey, decryptAESData, getNewRSAPrivateKey, findStartCode, isIFrame, generateLockSequence, decodeLockPayload, generateBasicLockAESKey, getLockVectorBytes, decryptLockAESData, buildLookupWithKeyPayload2, buildCheckCamPayload2, buildLookupWithKeyPayload3, decodeBase64, getVideoCodec, checkT8420, buildVoidCommandPayload, isP2PQueueMessage, buildTalkbackAudioFrameHeader, getLocalIpAddress, decodeP2PCloudIPs, decodeSmartSafeData, decryptPayloadData, decryptP2PData, getP2PCommandEncryptionKey, getNullTerminatedString, generateSmartLockAESKey, readNullTerminatedBuffer } from "./utils";
 import { RequestMessageType, ResponseMessageType, CommandType, ErrorCode, P2PDataType, P2PDataTypeHeader, AudioCodec, VideoCodec, P2PConnectionType, AlarmEvent, IndoorSoloSmartdropCommandType, SmartSafeCommandCode, ESLCommand, ESLBleCommand, TFCardStatus, EncryptionType, InternalP2PCommandType, SmartLockCommand, SmartLockBleCommandFunctionType2, SmartLockBleCommandFunctionType1, SmartLockFunctionType } from "./types";
-import { AlarmMode } from "../http/types";
+import { AlarmMode, DeviceType } from "../http/types";
 import { P2PDataMessage, P2PDataMessageAudio, P2PDataMessageBuilder, P2PMessageState, P2PDataMessageVideo, P2PMessage, P2PDataHeader, P2PDataMessageState, P2PClientProtocolEvents, DeviceSerial, P2PQueueMessage, P2PCommand, P2PVideoMessageState, P2PDatabaseResponse, P2PDatabaseQueryLatestInfoResponse, P2PDatabaseDeleteResponse, DatabaseQueryLatestInfo, DatabaseCountByDate, P2PDatabaseCountByDateResponse, P2PDatabaseQueryLocalResponse, DatabaseQueryLocal, P2PDatabaseQueryLocalHistoryRecordInfo, P2PDatabaseQueryLocalRecordCropPictureInfo, CustomDataType } from "./interfaces";
 import { DskKeyResponse, ResultResponse, StationListResponse } from "../http/models";
 import { HTTPApi } from "../http/api";
@@ -401,6 +401,12 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     private cloudLookup(): void {
+        // Skip cloud lookup for T85D0 if DSK key is not available (cloud lookup requires DSK key)
+        const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
+        if (isT85D0 && this.dskKey === "") {
+            rootP2PLogger.debug(`Skipping cloud lookup for T85D0 (no DSK key available)`, { stationSN: this.rawStation.station_sn });
+            return;
+        }
         this.cloudAddresses.map((address) => this.cloudLookupByAddress(address));
         this._clearLookupRetryTimeout();
         this.lookupRetryTimeout = setTimeout(() => {
@@ -409,6 +415,12 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     private cloudLookup2(): void {
+        // Skip cloud lookup for T85D0 if DSK key is not available (cloud lookup requires DSK key)
+        const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
+        if (isT85D0 && this.dskKey === "") {
+            rootP2PLogger.debug(`Skipping cloud lookup2 for T85D0 (no DSK key available)`, { stationSN: this.rawStation.station_sn });
+            return;
+        }
         this.cloudAddresses.map((address) => this.cloudLookupByAddress2(address));
         this._clearLookup2RetryTimeout();
         this.lookup2RetryTimeout = setTimeout(() => {
@@ -848,11 +860,20 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 const p2pDid = `${msg.subarray(4, 12).toString("utf8").replace(/[\0]+$/g, "")}-${msg.subarray(12, 16).readUInt32BE().toString().padStart(6, "0")}-${msg.subarray(16, 24).toString("utf8").replace(/[\0]+$/g, "")}`;
                 rootP2PLogger.trace(`Received message - LOCAL_LOOKUP_RESP - Got response`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
 
+                rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Comparing P2P DIDs`, { 
+                    stationSN: this.rawStation.station_sn, 
+                    expectedP2pDid: this.rawStation.p2p_did,
+                    receivedP2pDid: p2pDid,
+                    match: p2pDid === this.rawStation.p2p_did,
+                    ip: rinfo.address, 
+                    port: rinfo.port 
+                });
+
                 if (p2pDid === this.rawStation.p2p_did) {
                     rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Wanted device was found, connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
                     this._connect({ host: rinfo.address, port: rinfo.port }, p2pDid);
                 } else {
-                    rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Unwanted device was found, don't connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
+                    rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Unwanted device was found, don't connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid, expectedP2pDid: this.rawStation.p2p_did });
                 }
             }
         } else if (hasHeader(msg, ResponseMessageType.LOOKUP_ADDR)) {
@@ -2637,6 +2658,12 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                         });
                     } else {
                         rootP2PLogger.error(`Get DSK keys - Response code not ok`, { stationSN: this.rawStation.station_sn, code: result.code, msg: result.msg });
+                        // For T85D0 locks, DSK keys may not be available - this is expected
+                        // Connection will rely on local lookup instead of cloud lookup
+                        const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
+                        if (isT85D0) {
+                            rootP2PLogger.debug(`Get DSK keys - T85D0 lock, DSK keys not available (expected). Will use local lookup only.`, { stationSN: this.rawStation.station_sn, code: result.code, msg: result.msg });
+                        }
                     }
                 } else {
                     rootP2PLogger.error(`Get DSK keys - Status return code not 200`, { stationSN: this.rawStation.station_sn, status: response.status, statusText: response.statusText });
