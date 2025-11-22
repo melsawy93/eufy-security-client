@@ -541,10 +541,10 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
              // Or it might return the real DID in the response.
              let p2pDidToUse = this.rawStation.p2p_did;
              if (!p2pDidToUse || p2pDidToUse === '') {
-                 p2pDidToUse = 'Eufy-000000-T85D0'; // Placeholder in valid format: AAAAAAAA-NNNNNN-BBBBBBBB
-                 rootP2PLogger.warn(`[T85D0_DEBUG_v2] P2P DID is missing, using placeholder for connection attempt: ${p2pDidToUse}`, { stationSN: this.rawStation.station_sn });
-                 // Update the raw station temporarily so buildCheckCamPayload works
-                 // We should probably not overwrite it permanently until confirmed
+                 // Construct a 20-byte DID using "eufy" + Station SN (16 chars)
+                 // This fits the 20-byte requirement (4 + 16 = 20)
+                 p2pDidToUse = 'eufy' + this.rawStation.station_sn;
+                 rootP2PLogger.warn(`[T85D0_DEBUG_v2] P2P DID is missing, using constructed DID from SN: ${p2pDidToUse}`, { stationSN: this.rawStation.station_sn });
              }
              this._connect({ host: host, port: 32108 }, p2pDidToUse);
         }
