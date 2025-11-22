@@ -679,6 +679,11 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     private sendQueuedMessage(): void {
+        rootP2PLogger.debug(`[T85D0_DEBUG_v2] sendQueuedMessage() called`, { 
+            stationSN: this.rawStation.station_sn, 
+            queueLength: this.sendQueue.length,
+            connected: this.connected 
+        });
         if (this.sendQueue.length > 0) {
             if (this.connected) {
                 let queuedMessage: P2PQueueMessage;
@@ -896,6 +901,12 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     private handleMsg(msg: Buffer, rinfo: RemoteInfo): void {
+        rootP2PLogger.trace(`[T85D0_DEBUG_v2] handleMsg() called`, { 
+            stationSN: this.rawStation.station_sn,
+            msgLength: msg.length,
+            address: rinfo.address,
+            port: rinfo.port
+        });
         if (hasHeader(msg, ResponseMessageType.LOCAL_LOOKUP_RESP)) {
             if (!this.connected) {
                 this._clearLookupTimeout();

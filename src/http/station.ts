@@ -5235,6 +5235,12 @@ export class Station extends TypedEmitter<StationEvents> {
     }
 
     public lockDevice(device: Device, value: boolean): void {
+        rootHTTPLogger.debug(`[T85D0_DEBUG_v2] lockDevice() ENTRY POINT - This log proves new code is running!`, { 
+            stationSN: this.rawStation.station_sn, 
+            deviceSN: device.getSerial(),
+            value: value,
+            deviceType: device.getDeviceType()
+        });
         const propertyData: PropertyData = {
             name: PropertyName.DeviceLocked,
             value: value
@@ -5335,6 +5341,11 @@ export class Station extends TypedEmitter<StationEvents> {
                 property: propertyData
             });
         } else if (device.isLockWifiT8506() || device.isLockWifiT8502() || device.isLockWifiT8510P() || device.isLockWifiT8520P() || device.isLockWifiT85D0()) {
+            rootHTTPLogger.debug(`[T85D0_DEBUG_v2] Lock device - T85D0/T8506/T8502/T8510P/T8520P path`, { 
+                stationSN: this.rawStation.station_sn, 
+                deviceSN: device.getSerial(),
+                isT85D0: device.isLockWifiT85D0()
+            });
             // For T85D0, use device serial instead of station serial since it's a standalone lock
             const deviceSN = device.isLockWifiT85D0() ? device.getSerial() : this.rawStation.station_sn;
             const command = getSmartLockP2PCommand(
