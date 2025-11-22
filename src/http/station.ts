@@ -5335,16 +5335,20 @@ export class Station extends TypedEmitter<StationEvents> {
                 property: propertyData
             });
         } else if (device.isLockWifiT8506() || device.isLockWifiT8502() || device.isLockWifiT8510P() || device.isLockWifiT8520P() || device.isLockWifiT85D0()) {
+            // For T85D0, use device serial instead of station serial since it's a standalone lock
+            const deviceSN = device.isLockWifiT85D0() ? device.getSerial() : this.rawStation.station_sn;
             const command = getSmartLockP2PCommand(
-                this.rawStation.station_sn,
+                deviceSN,
                 this.rawStation.member.admin_user_id,
                 SmartLockCommand.ON_OFF_LOCK,
                 device.getChannel(),
                 this.p2pSession.incLockSequenceNumber(),
                 Lock.encodeCmdSmartLockUnlock(this.rawStation.member.admin_user_id, value, this.rawStation.member.nick_name, this.rawStation.member.short_user_id)
             );
-            rootHTTPLogger.debug("Station lock device - Locking/unlocking device...", { station: this.getSerial(), device: device.getSerial(), admin_user_id: this.rawStation.member.admin_user_id, payload: command.payload });
+            rootHTTPLogger.debug("Station lock device - Locking/unlocking device...", { station: this.getSerial(), device: device.getSerial(), deviceSN: deviceSN, admin_user_id: this.rawStation.member.admin_user_id, payload: command.payload });
 
+            // Set channel on the payload object for sendCommandWithStringPayload
+            command.payload.channel = device.getChannel();
             this.p2pSession.sendCommandWithStringPayload(command.payload, {
                 property: propertyData
             });
