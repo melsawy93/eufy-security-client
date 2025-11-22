@@ -531,7 +531,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     public async connect(host?: string): Promise<void> {
-        rootP2PLogger.debug(`[T85D0_DEBUG_v2] P2P connect() called`, { 
+        rootP2PLogger.info(`[T85D0_DEBUG_v2] P2P connect() called`, { 
             stationSN: this.rawStation.station_sn, 
             connected: this.connected, 
             connecting: this.connecting, 
@@ -679,7 +679,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     private sendQueuedMessage(): void {
-        rootP2PLogger.debug(`[T85D0_DEBUG_v2] sendQueuedMessage() called`, { 
+        rootP2PLogger.info(`[T85D0_DEBUG_v2] sendQueuedMessage() called`, { 
             stationSN: this.rawStation.station_sn, 
             queueLength: this.sendQueue.length,
             connected: this.connected 
@@ -708,7 +708,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 }
             } else if (!this.connected && this.sendQueue.filter((queue) => queue.p2pCommand.commandType !== CommandType.CMD_PING && queue.p2pCommand.commandType !== CommandType.CMD_GET_DEVICE_PING).length > 0) {
                 rootP2PLogger.debug(`Initiate station p2p connection to send queued data`, { stationSN: this.rawStation.station_sn, queuedDataCount: this.sendQueue.filter((queue) => queue.p2pCommand.commandType !== CommandType.CMD_PING && queue.p2pCommand.commandType !== CommandType.CMD_GET_DEVICE_PING).length });
-                rootP2PLogger.debug(`[T85D0_DEBUG_v2] About to call connect() from sendQueuedMessage`, { 
+                rootP2PLogger.info(`[T85D0_DEBUG_v2] About to call connect() from sendQueuedMessage`, { 
                     stationSN: this.rawStation.station_sn, 
                     connected: this.connected, 
                     connecting: this.connecting,
