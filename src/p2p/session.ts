@@ -506,7 +506,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 host = localIP.substring(0, localIP.lastIndexOf(".") + 1).concat("255")
             }
         }
-        rootP2PLogger.debug(`lookup() called`, { 
+        rootP2PLogger.debug(`[T85D0_DEBUG_v2] lookup() called`, { 
             stationSN: this.rawStation.station_sn, 
             host: host, 
             preferredIPAddress: this.preferredIPAddress,
@@ -531,7 +531,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     }
 
     public async connect(host?: string): Promise<void> {
-        rootP2PLogger.debug(`P2P connect() called`, { 
+        rootP2PLogger.debug(`[T85D0_DEBUG_v2] P2P connect() called`, { 
             stationSN: this.rawStation.station_sn, 
             connected: this.connected, 
             connecting: this.connecting, 
@@ -541,9 +541,9 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
         if (!this.connected && !this.connecting && this.rawStation.p2p_did !== undefined) {
             this.connecting = true;
             this.terminating = false;
-            rootP2PLogger.debug(`Starting P2P connection process`, { stationSN: this.rawStation.station_sn, p2pDid: this.rawStation.p2p_did });
+            rootP2PLogger.debug(`[T85D0_DEBUG_v2] Starting P2P connection process`, { stationSN: this.rawStation.station_sn, p2pDid: this.rawStation.p2p_did });
             await this.renewDSKKey();
-            rootP2PLogger.debug(`DSK key renewal completed`, { stationSN: this.rawStation.station_sn, dskKey: this.dskKey, dskKeyLength: this.dskKey.length });
+            rootP2PLogger.debug(`[T85D0_DEBUG_v2] DSK key renewal completed`, { stationSN: this.rawStation.station_sn, dskKey: this.dskKey, dskKeyLength: this.dskKey.length });
             if (!this.binded) {
                 rootP2PLogger.debug(`Binding socket before lookup`, { stationSN: this.rawStation.station_sn, listeningPort: this.listeningPort });
                 this.socket.bind(this.listeningPort, () => {
@@ -564,7 +564,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 this.lookup(host);
             }
         } else {
-            rootP2PLogger.debug(`P2P connect() skipped - already connected/connecting or no p2p_did`, { 
+            rootP2PLogger.debug(`[T85D0_DEBUG_v2] P2P connect() skipped - already connected/connecting or no p2p_did`, { 
                 stationSN: this.rawStation.station_sn, 
                 connected: this.connected, 
                 connecting: this.connecting, 
@@ -703,7 +703,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 }
             } else if (!this.connected && this.sendQueue.filter((queue) => queue.p2pCommand.commandType !== CommandType.CMD_PING && queue.p2pCommand.commandType !== CommandType.CMD_GET_DEVICE_PING).length > 0) {
                 rootP2PLogger.debug(`Initiate station p2p connection to send queued data`, { stationSN: this.rawStation.station_sn, queuedDataCount: this.sendQueue.filter((queue) => queue.p2pCommand.commandType !== CommandType.CMD_PING && queue.p2pCommand.commandType !== CommandType.CMD_GET_DEVICE_PING).length });
-                rootP2PLogger.debug(`About to call connect() from sendQueuedMessage`, { 
+                rootP2PLogger.debug(`[T85D0_DEBUG_v2] About to call connect() from sendQueuedMessage`, { 
                     stationSN: this.rawStation.station_sn, 
                     connected: this.connected, 
                     connecting: this.connecting,
@@ -904,7 +904,7 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 const p2pDid = `${msg.subarray(4, 12).toString("utf8").replace(/[\0]+$/g, "")}-${msg.subarray(12, 16).readUInt32BE().toString().padStart(6, "0")}-${msg.subarray(16, 24).toString("utf8").replace(/[\0]+$/g, "")}`;
                 rootP2PLogger.trace(`Received message - LOCAL_LOOKUP_RESP - Got response`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
 
-                rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Comparing P2P DIDs`, { 
+                rootP2PLogger.debug(`[T85D0_DEBUG_v2] Received message - LOCAL_LOOKUP_RESP - Comparing P2P DIDs`, { 
                     stationSN: this.rawStation.station_sn, 
                     expectedP2pDid: this.rawStation.p2p_did,
                     receivedP2pDid: p2pDid,
