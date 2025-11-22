@@ -501,16 +501,19 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 host = this.preferredIPAddress;
             } else if (this.localIPAddress !== undefined) {
                 host = this.localIPAddress;
+            } else if (this.rawStation.ip_addr !== undefined && this.rawStation.ip_addr !== "" && isPrivateIp(this.rawStation.ip_addr)) {
+                host = this.rawStation.ip_addr;
             } else {
                 const localIP = getLocalIpAddress();
                 host = localIP.substring(0, localIP.lastIndexOf(".") + 1).concat("255")
             }
         }
-        rootP2PLogger.error(`[T85D0_DEBUG_v2] ===== lookup() called =====`, { 
+        rootP2PLogger.debug(`[T85D0_DEBUG_v2] ===== lookup() called =====`, { 
             stationSN: this.rawStation.station_sn, 
             host: host, 
             preferredIPAddress: this.preferredIPAddress,
-            localIPAddress: this.localIPAddress 
+            localIPAddress: this.localIPAddress,
+            rawStationIP: this.rawStation.ip_addr
         });
         this.localLookup(host);
         this.cloudLookup();
@@ -539,10 +542,19 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
             p2pDid: this.rawStation.p2p_did,
             host: host 
         });
-        if (!this.connected && !this.connecting && this.rawStation.p2p_did !== undefined) {
+        // For T85D0, allow connection attempt even if p2p_did is empty (it may be discovered during local lookup)
+        const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
+        const hasValidP2pDid = this.rawStation.p2p_did !== undefined && this.rawStation.p2p_did !== '';
+        
+        if (!this.connected && !this.connecting && (hasValidP2pDid || isT85D0)) {
             this.connecting = true;
             this.terminating = false;
-            rootP2PLogger.debug(`[T85D0_DEBUG_v2] Starting P2P connection process`, { stationSN: this.rawStation.station_sn, p2pDid: this.rawStation.p2p_did });
+            rootP2PLogger.debug(`[T85D0_DEBUG_v2] Starting P2P connection process`, { 
+                stationSN: this.rawStation.station_sn, 
+                p2pDid: this.rawStation.p2p_did,
+                isT85D0: isT85D0,
+                hasValidP2pDid: hasValidP2pDid
+            });
             await this.renewDSKKey();
             rootP2PLogger.debug(`[T85D0_DEBUG_v2] DSK key renewal completed`, { stationSN: this.rawStation.station_sn, dskKey: this.dskKey, dskKeyLength: this.dskKey.length });
             if (!this.binded) {
@@ -565,11 +577,18 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 this.lookup(host);
             }
         } else {
-            rootP2PLogger.debug(`[T85D0_DEBUG_v2] P2P connect() skipped - already connected/connecting or no p2p_did`, { 
+            const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
+            const hasValidP2pDid = this.rawStation.p2p_did !== undefined && this.rawStation.p2p_did !== '';
+            rootP2PLogger.debug(`[T85D0_DEBUG_v2] P2P connect() skipped`, { 
                 stationSN: this.rawStation.station_sn, 
                 connected: this.connected, 
                 connecting: this.connecting, 
-                p2pDid: this.rawStation.p2p_did 
+                p2pDid: this.rawStation.p2p_did,
+                p2pDidEmpty: this.rawStation.p2p_did === '',
+                p2pDidUndefined: this.rawStation.p2p_did === undefined,
+                isT85D0: isT85D0,
+                hasValidP2pDid: hasValidP2pDid,
+                willConnect: !this.connected && !this.connecting && (hasValidP2pDid || isT85D0)
             });
         }
     }
@@ -914,22 +933,31 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                 this._clearLocalLookupRetryTimeout();
 
                 const p2pDid = `${msg.subarray(4, 12).toString("utf8").replace(/[\0]+$/g, "")}-${msg.subarray(12, 16).readUInt32BE().toString().padStart(6, "0")}-${msg.subarray(16, 24).toString("utf8").replace(/[\0]+$/g, "")}`;
-                rootP2PLogger.trace(`Received message - LOCAL_LOOKUP_RESP - Got response`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
+                // rootP2PLogger.trace(`Received message - LOCAL_LOOKUP_RESP - Got response`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
 
-                rootP2PLogger.debug(`[T85D0_DEBUG_v2] Received message - LOCAL_LOOKUP_RESP - Comparing P2P DIDs`, { 
-                    stationSN: this.rawStation.station_sn, 
-                    expectedP2pDid: this.rawStation.p2p_did,
-                    receivedP2pDid: p2pDid,
-                    match: p2pDid === this.rawStation.p2p_did,
-                    ip: rinfo.address, 
-                    port: rinfo.port 
-                });
+                const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
+                const p2pDidEmpty = this.rawStation.p2p_did === '' || this.rawStation.p2p_did === undefined;
+                const p2pDidMatches = p2pDid === this.rawStation.p2p_did;
 
-                if (p2pDid === this.rawStation.p2p_did) {
-                    rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Wanted device was found, connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
+
+                // For T85D0 with empty p2p_did, accept the first local lookup response
+                // Otherwise, match by p2p_did
+                if (p2pDidMatches || (isT85D0 && p2pDidEmpty)) {
+                    if (isT85D0 && p2pDidEmpty) {
+                        // rootP2PLogger.debug(`[T85D0_DEBUG_v2] Received message - LOCAL_LOOKUP_RESP - T85D0 with empty p2p_did, accepting response and updating p2p_did`, { 
+                        //     stationSN: this.rawStation.station_sn, 
+                        //     ip: rinfo.address, 
+                        //     port: rinfo.port, 
+                        //     receivedP2pDid: p2pDid,
+                        //     oldP2pDid: this.rawStation.p2p_did
+                        // });
+                        // Update the p2p_did for future use
+                        this.rawStation.p2p_did = p2pDid;
+                    }
+                    // rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Wanted device was found, connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid });
                     this._connect({ host: rinfo.address, port: rinfo.port }, p2pDid);
                 } else {
-                    rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Unwanted device was found, don't connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid, expectedP2pDid: this.rawStation.p2p_did });
+                    // rootP2PLogger.debug(`Received message - LOCAL_LOOKUP_RESP - Unwanted device was found, don't connect to it`, { stationSN: this.rawStation.station_sn, ip: rinfo.address, port: rinfo.port, p2pDid: p2pDid, expectedP2pDid: this.rawStation.p2p_did });
                 }
             }
         } else if (hasHeader(msg, ResponseMessageType.LOOKUP_ADDR)) {
@@ -2713,12 +2741,13 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
                             }
                         });
                     } else {
-                        rootP2PLogger.error(`Get DSK keys v2 - Response code not ok`, { stationSN: this.rawStation.station_sn, code: result.code, msg: result.msg });
                         // For T85D0 locks, DSK keys may not be available - this is expected
                         // Connection will rely on local lookup instead of cloud lookup
                         const isT85D0 = this.rawStation.device_type === DeviceType.LOCK_85D0;
-                        if (isT85D0) {
+                        if (isT85D0 && result.code === 20028) {
                             rootP2PLogger.debug(`Get DSK keys - T85D0 lock, DSK keys not available (expected). Will use local lookup only.`, { stationSN: this.rawStation.station_sn, code: result.code, msg: result.msg });
+                        } else {
+                            rootP2PLogger.error(`Get DSK keys v2 - Response code not ok`, { stationSN: this.rawStation.station_sn, code: result.code, msg: result.msg });
                         }
                     }
                 } else {
